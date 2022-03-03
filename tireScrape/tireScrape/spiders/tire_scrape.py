@@ -1,6 +1,8 @@
 import scrapy
+from scrapy.crawler import CrawlerProcess
 import pandas as pd
-import parquet
+import json
+
 
 class TireScrape(scrapy.Spider):
     name = 'tires'
@@ -22,12 +24,11 @@ class TireScrape(scrapy.Spider):
     def parse(self, response):
         for link in response.css('ul.clearfix a::attr(href)'):
             yield scrapy.Request(url="https://www.tirerack.com{}".format(link.get()),
-                                   callback=self.parse_tire)
+                                 callback=self.parse_tire)
 
     def parse_tire(self, response):
-
         name = response.css('h1.brandNameHeader::text').extract()
-        #quotes는 창 열 때마다 바뀐다는 점
+        # quotes는 창 열 때마다 바뀐다는 점
         quotes = response.css('div.quote p::text').extract()
         tire_types = response.xpath('//*[@id="tr_tab_content_0"]/div/div/div/div/a/text()').extract()
         new_tires = response.xpath('//*[@id="tr_tab_content_1"]/div[2]/div/div/div/a/text()').extract()
@@ -43,12 +44,40 @@ class TireScrape(scrapy.Spider):
 
         yield item
 
+
+# API에서 spider 작동 시키기
+def main(event, context):
+    # TODO implement
+
+    process = CrawlerProcess(settings={
+        # "FEEDS":{
+        #     "tires.csv": {"format": "csv"},
+        # },
+        'FEED_FORMAT': 'csv',
+        'FEED_URI': 'tires.csv',
+        'USER_AGENT': 'Mozilla/5.0(Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/97.0.4692.99 Safari/537.36'
+    })
+
+    process.crawl(TireScrape)
+    process.start()
+
+    # export to s3
+    tires_df = pd.read_csv("tires.csv")
+    tires_df.to_parquet('s3://sagemaker-studio-share/datasets/crawling/tirerack/tires.parquet')
+
+    return {
+        'statusCode': 200,
+        'body': json.dumps('Hello from Lambda!')
+    }
+
+
+main('', '')
     # tire_df = pd.DataFrame(data=parse_tire.item)
     #
     # print(tire_df)
 
 # # Selenium 연동 전에 작동 되는 코드
-#작동이 되긴 하지만 리스트에 값이 반환 안됨
+# 작동이 되긴 하지만 리스트에 값이 반환 안됨
 #     name = 'tires'
 #     allowed_domains = ['tirerack.com']
 #     custom_settings = {
@@ -99,33 +128,33 @@ class TireScrape(scrapy.Spider):
 #         #     }
 
 # Trial and Error-------------------------------------------------------------
-    # # getting and following links of different brands
-    # def parse(self, response):
-    #     # print("hi")
-    #     for link in response.xpath('//*[@id="ui-brandListBlog"]/div/ul/a/@href'):
-    #         yield response.follow(link.get(), callback=self.parse_brand)
-    #
-    # def parse_brand(self, response):
-    #     # print("Hi")
-    #     information = response.xpath('//*[@id="brand-details"]/div')
-    #     for info in information:
-    #         yield{
-    #             'name': info.xpath('//*[@id="brand-details"]/div/h1/text()').get()
-    #         }
+# # getting and following links of different brands
+# def parse(self, response):
+#     # print("hi")
+#     for link in response.xpath('//*[@id="ui-brandListBlog"]/div/ul/a/@href'):
+#         yield response.follow(link.get(), callback=self.parse_brand)
+#
+# def parse_brand(self, response):
+#     # print("Hi")
+#     information = response.xpath('//*[@id="brand-details"]/div')
+#     for info in information:
+#         yield{
+#             'name': info.xpath('//*[@id="brand-details"]/div/h1/text()').get()
+#         }
 
-        # def parse(self, response):
-    #     print('hi')
-    #     for url in response.xpath('//*[@id="ui-brandListBlog"]/div/ul/a/@href').extract():
-    #         yield scrapy.Request(response.urljoin("https://www.tirerack.com{}".format(url)
-    #                                               , callback=self.parse_brandpage,
-    #                                               dont_filter=True))
-    #
-    # def parse_brandpage(self, response):
-    #     # brand_info = response.xpath('//*[@id="brand-details"]/div')
-    #
-    #     yield {
-    #         'name': response.xpath('//*[@id="brand-details"]/div/h1/text()')
-    #     }
+# def parse(self, response):
+#     print('hi')
+#     for url in response.xpath('//*[@id="ui-brandListBlog"]/div/ul/a/@href').extract():
+#         yield scrapy.Request(response.urljoin("https://www.tirerack.com{}".format(url)
+#                                               , callback=self.parse_brandpage,
+#                                               dont_filter=True))
+#
+# def parse_brandpage(self, response):
+#     # brand_info = response.xpath('//*[@id="brand-details"]/div')
+#
+#     yield {
+#         'name': response.xpath('//*[@id="brand-details"]/div/h1/text()')
+#     }
 
 # parse로 안넘어감
 #     name = 'tires'
